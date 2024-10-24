@@ -8,7 +8,7 @@ import (
 	"math"
 	"slices"
 
-	"github.com/hashicorp/go-set/v2"
+	"github.com/hashicorp/go-set/v3"
 	"github.com/hashicorp/nomad/client/lib/idset"
 	"github.com/hashicorp/nomad/client/lib/numalib/hw"
 	"github.com/hashicorp/nomad/helper"
@@ -506,7 +506,9 @@ NEXTNODE:
 							devices:    set.From(task.Resources.NUMA.GetDevices()),
 						}
 
-						offer, sumAffinities, err := devAllocator.createOffer(memory, device)
+						var offer *structs.AllocatedDeviceResource
+						var sumAffinities float64
+						offer, sumAffinities, err = devAllocator.createOffer(memory, device)
 						if offer == nil || err != nil {
 							devAllocator = devAllocatorSnapshot
 							taskResources.Devices = taskResourcesSnapshot
@@ -554,6 +556,7 @@ NEXTNODE:
 
 				// If preemption is not enabled, then this node is exhausted.
 				if !iter.evict {
+					// surface err from createOffer()
 					iter.ctx.Metrics().ExhaustedNode(option.Node, fmt.Sprintf("devices: %s", err))
 					continue NEXTNODE
 				}

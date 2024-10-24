@@ -16,7 +16,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-cleanhttp"
-	"github.com/hashicorp/go-set/v2"
+	"github.com/hashicorp/go-set/v3"
 	"github.com/hashicorp/go-version"
 	goversion "github.com/hashicorp/go-version"
 	"github.com/hashicorp/nomad/api"
@@ -54,11 +54,10 @@ func TestVaultCompat(t *testing.T) {
 
 func testVaultVersions(t *testing.T) {
 	versions := scanVaultVersions(t, getMinimumVersion(t))
-	versions.ForEach(func(b build) bool {
+	for b := range versions.Items() {
 		downloadVaultBuild(t, b)
 		testVaultBuild(t, b)
-		return true
-	})
+	}
 }
 
 func testVaultBuild(t *testing.T, b build) {
@@ -330,6 +329,12 @@ func downloadVaultBuild(t *testing.T, b build) {
 
 	cmd := exec.CommandContext(ctx, "hc-install", "install", "-version", b.Version, "-path", path, "vault")
 	bs, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Logf("download: failed to download %s, retrying once: %v", b.Version, err)
+		cmd = exec.CommandContext(ctx, "hc-install", "install",
+			"-version", b.Version, "-path", path, "vault")
+		bs, err = cmd.CombinedOutput()
+	}
 	must.NoError(t, err, must.Sprintf("failed to download vault %s: %s", b.Version, string(bs)))
 }
 

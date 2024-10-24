@@ -553,6 +553,9 @@ func NewServer(config *Config, consulCatalog consul.CatalogAPI, consulConfigFunc
 	// exist before it can start.
 	s.keyringReplicator = NewKeyringReplicator(s, encrypter)
 
+	// Block until keys are decrypted
+	s.encrypter.IsReady(s.shutdownCtx)
+
 	// Done
 	return s, nil
 }
@@ -1378,6 +1381,7 @@ func (s *Server) setupRaft() error {
 		EvalBroker:         s.evalBroker,
 		Periodic:           s.periodicDispatcher,
 		Blocked:            s.blockedEvals,
+		Encrypter:          s.encrypter,
 		Logger:             s.logger,
 		Region:             s.Region(),
 		EnableEventBroker:  s.config.EnableEventBroker,
@@ -1640,9 +1644,10 @@ func (s *Server) setupSerf(conf *serf.Config, ch chan serf.Event, path string) (
 			return nil, err
 		}
 	}
-	// LeavePropagateDelay is used to make sure broadcasted leave intents propagate
-	// This value was tuned using https://www.serf.io/docs/internals/simulator.html to
-	// allow for convergence in 99.9% of nodes in a 10 node cluster
+	// LeavePropagateDelay is used to make sure broadcasted leave intents
+	// propagate This value was tuned using
+	// https://github.com/hashicorp/serf/blob/master/docs/internals/simulator.html.erb
+	// to allow for convergence in 99.9% of nodes in a 10 node cluster
 	conf.LeavePropagateDelay = 1 * time.Second
 	conf.Merge = &serfMergeDelegate{}
 

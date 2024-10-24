@@ -235,7 +235,7 @@ func TestTask_Require(t *testing.T) {
 			{
 				CIDR:          "0.0.0.0/0",
 				MBits:         pointerOf(100),
-				ReservedPorts: []Port{{"", 80, 0, ""}, {"", 443, 0, ""}},
+				ReservedPorts: []Port{{Label: "", Value: 80}, {Label: "", Value: 443}},
 			},
 		},
 	}
@@ -321,6 +321,7 @@ func TestTask_Artifact(t *testing.T) {
 	must.Eq(t, "local/foo.txt", filepath.ToSlash(*a.RelativeDest))
 	must.Nil(t, a.GetterOptions)
 	must.Nil(t, a.GetterHeaders)
+	must.Eq(t, false, a.Chown)
 }
 
 func TestTask_VolumeMount(t *testing.T) {

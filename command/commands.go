@@ -523,6 +523,21 @@ func Commands(metaPtr *Meta, agentUi cli.Ui) map[string]cli.CommandFactory {
 		},
 		"job start": func() (cli.Command, error) {
 			return &JobStartCommand{
+        Meta: meta,
+			}, nil
+		},
+		"job tag": func() (cli.Command, error) {
+			return &JobTagCommand{
+				Meta: meta,
+			}, nil
+		},
+		"job tag apply": func() (cli.Command, error) {
+			return &JobTagApplyCommand{
+				Meta: meta,
+			}, nil
+		},
+		"job tag unset": func() (cli.Command, error) {
+			return &JobTagUnsetCommand{
 				Meta: meta,
 			}, nil
 		},
@@ -721,6 +736,11 @@ func Commands(metaPtr *Meta, agentUi cli.Ui) map[string]cli.CommandFactory {
 				Meta: meta,
 			}, nil
 		},
+		"operator gossip": func() (cli.Command, error) {
+			return &OperatorGossipCommand{
+				Meta: meta,
+			}, nil
+		},
 		"operator gossip keyring": func() (cli.Command, error) {
 			return &OperatorGossipKeyringCommand{
 				Meta: meta,
@@ -809,6 +829,11 @@ func Commands(metaPtr *Meta, agentUi cli.Ui) map[string]cli.CommandFactory {
 				Meta: meta,
 			}, nil
 		},
+		"operator root": func() (cli.Command, error) {
+			return &OperatorRootCommand{
+				Meta: meta,
+			}, nil
+		},
 		"operator root keyring": func() (cli.Command, error) {
 			return &OperatorRootKeyringCommand{
 				Meta: meta,
@@ -851,6 +876,11 @@ func Commands(metaPtr *Meta, agentUi cli.Ui) map[string]cli.CommandFactory {
 		},
 		"operator snapshot restore": func() (cli.Command, error) {
 			return &OperatorSnapshotRestoreCommand{
+				Meta: meta,
+			}, nil
+		},
+		"operator snapshot redact": func() (cli.Command, error) {
+			return &OperatorSnapshotRedactCommand{
 				Meta: meta,
 			}, nil
 		},

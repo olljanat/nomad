@@ -32,7 +32,7 @@ import (
 	"github.com/hashicorp/cronexpr"
 	"github.com/hashicorp/go-msgpack/v2/codec"
 	"github.com/hashicorp/go-multierror"
-	"github.com/hashicorp/go-set/v2"
+	"github.com/hashicorp/go-set/v3"
 	"github.com/hashicorp/go-version"
 	"github.com/hashicorp/nomad/acl"
 	"github.com/hashicorp/nomad/client/lib/idset"
@@ -117,8 +117,8 @@ const (
 	ServiceRegistrationDeleteByIDRequestType     MessageType = 48
 	ServiceRegistrationDeleteByNodeIDRequestType MessageType = 49
 	VarApplyStateRequestType                     MessageType = 50
-	RootKeyMetaUpsertRequestType                 MessageType = 51
-	RootKeyMetaDeleteRequestType                 MessageType = 52
+	RootKeyMetaUpsertRequestType                 MessageType = 51 // DEPRECATED
+	WrappedRootKeysDeleteRequestType             MessageType = 52
 	ACLRolesUpsertRequestType                    MessageType = 53
 	ACLRolesDeleteByIDRequestType                MessageType = 54
 	ACLAuthMethodsUpsertRequestType              MessageType = 55
@@ -127,10 +127,13 @@ const (
 	ACLBindingRulesDeleteRequestType             MessageType = 58
 	NodePoolUpsertRequestType                    MessageType = 59
 	NodePoolDeleteRequestType                    MessageType = 60
+	JobVersionTagRequestType                     MessageType = 61
+	WrappedRootKeysUpsertRequestType             MessageType = 62
+	NamespaceUpsertRequestType                   MessageType = 64
+	NamespaceDeleteRequestType                   MessageType = 65
 
-	// Namespace types were moved from enterprise and therefore start at 64
-	NamespaceUpsertRequestType MessageType = 64
-	NamespaceDeleteRequestType MessageType = 65
+	// NOTE: MessageTypes are shared between CE and ENT. If you need to add a
+	// new type, check that ENT is not already using that value.
 )
 
 const (
@@ -1648,8 +1651,10 @@ type JobListResponse struct {
 
 // JobVersionsRequest is used to get a jobs versions
 type JobVersionsRequest struct {
-	JobID string
-	Diffs bool
+	JobID       string
+	Diffs       bool
+	DiffVersion *uint64
+	DiffTagName string
 	QueryOptions
 }
 
@@ -2246,7 +2251,7 @@ func (n *Node) Canonicalize() {
 		n.SchedulingEligibility = NodeSchedulingEligible
 	}
 
-	// COMPAT remove in 1.9+
+	// COMPAT remove in 1.10+
 	// In v1.7 we introduce Topology into the NodeResources struct which the client
 	// will fingerprint. Since the upgrade path must cover servers that get upgraded
 	// before clients which will send the old struct, we synthesize a pseudo topology
@@ -2802,18 +2807,23 @@ type NodeNetworkAddress struct {
 }
 
 type AllocatedPortMapping struct {
-	Label  string
-	Value  int
-	To     int
-	HostIP string
+	// msgpack omit empty fields during serialization
+	_struct bool `codec:",omitempty"` // nolint: structcheck
+
+	Label           string
+	Value           int
+	To              int
+	HostIP          string
+	IgnoreCollision bool
 }
 
 func (m *AllocatedPortMapping) Copy() *AllocatedPortMapping {
 	return &AllocatedPortMapping{
-		Label:  m.Label,
-		Value:  m.Value,
-		To:     m.To,
-		HostIP: m.HostIP,
+		Label:           m.Label,
+		Value:           m.Value,
+		To:              m.To,
+		HostIP:          m.HostIP,
+		IgnoreCollision: m.IgnoreCollision,
 	}
 }
 
@@ -2829,6 +2839,8 @@ func (m *AllocatedPortMapping) Equal(o *AllocatedPortMapping) bool {
 	case m.To != o.To:
 		return false
 	case m.HostIP != o.HostIP:
+		return false
+	case m.IgnoreCollision != o.IgnoreCollision:
 		return false
 	}
 	return true
@@ -2853,6 +2865,9 @@ func (p AllocatedPorts) Get(label string) (AllocatedPortMapping, bool) {
 }
 
 type Port struct {
+	// msgpack omit empty fields during serialization
+	_struct bool `codec:",omitempty"` // nolint: structcheck
+
 	// Label is the key for HCL port blocks: port "foo" {}
 	Label string
 
@@ -2869,6 +2884,11 @@ type Port struct {
 	// to. Jobs with a HostNetwork set can only be placed on nodes with
 	// that host network available.
 	HostNetwork string
+
+	// IgnoreCollision ignores port collisions, so the port can be used more
+	// than one time on a single network, for tasks that support SO_REUSEPORT
+	// Should be used only with static ports.
+	IgnoreCollision bool
 }
 
 type DNSConfig struct {
@@ -3017,6 +3037,11 @@ func (n *NetworkResource) PortLabels() map[string]int {
 	return labelValues
 }
 
+func (n *NetworkResource) IsIPv6() bool {
+	ip := net.ParseIP(n.IP)
+	return ip != nil && ip.To4() == nil
+}
+
 // Networks defined for a task on the Resources struct.
 type Networks []*NetworkResource
 
@@ -3038,10 +3063,11 @@ func (ns Networks) Port(label string) AllocatedPortMapping {
 		for _, p := range n.ReservedPorts {
 			if p.Label == label {
 				return AllocatedPortMapping{
-					Label:  label,
-					Value:  p.Value,
-					To:     p.To,
-					HostIP: n.IP,
+					Label:           label,
+					Value:           p.Value,
+					To:              p.To,
+					HostIP:          n.IP,
+					IgnoreCollision: p.IgnoreCollision,
 				}
 			}
 		}
@@ -3241,9 +3267,9 @@ func (n *NodeResources) Copy() *NodeResources {
 		}
 	}
 
-	// COMPAT remove in 1.9+
+	// COMPAT remove in 1.10+
 	// apply compatibility fixups covering node topology
-	n.Compatibility()
+	newN.Compatibility()
 
 	return newN
 }
@@ -3305,7 +3331,7 @@ func (n *NodeResources) Merge(o *NodeResources) {
 		}
 	}
 
-	// COMPAT remove in 1.9+
+	// COMPAT remove in 1.10+
 	// apply compatibility fixups covering node topology
 	n.Compatibility()
 }
@@ -4555,6 +4581,41 @@ type Job struct {
 
 	// Links and Description fields for the Web UI
 	UI *JobUIConfig
+
+	// Metadata related to a tagged Job Version (which itself is really a Job)
+	VersionTag *JobVersionTag
+}
+
+type JobVersionTag struct {
+	Name        string
+	Description string
+	TaggedTime  int64
+}
+
+type JobApplyTagRequest struct {
+	JobID   string
+	Name    string
+	Tag     *JobVersionTag
+	Version uint64
+	WriteRequest
+}
+
+type JobTagResponse struct {
+	Name        string
+	Description string
+	TaggedTime  int64
+	QueryMeta
+}
+
+func (tv *JobVersionTag) Copy() *JobVersionTag {
+	if tv == nil {
+		return nil
+	}
+	return &JobVersionTag{
+		Name:        tv.Name,
+		Description: tv.Description,
+		TaggedTime:  tv.TaggedTime,
+	}
 }
 
 type JobUIConfig struct {
@@ -4711,6 +4772,7 @@ func (j *Job) Copy() *Job {
 	nj.Affinities = CopySliceAffinities(j.Affinities)
 	nj.Multiregion = j.Multiregion.Copy()
 	nj.UI = j.UI.Copy()
+	nj.VersionTag = j.VersionTag.Copy()
 
 	if j.TaskGroups != nil {
 		tgs := make([]*TaskGroup, len(j.TaskGroups))
@@ -4805,6 +4867,12 @@ func (j *Job) Validate() error {
 	if j.UI != nil {
 		if len(j.UI.Description) > MaxDescriptionCharacters {
 			mErr.Errors = append(mErr.Errors, fmt.Errorf("UI description must be under 1000 characters, currently %d", len(j.UI.Description)))
+		}
+	}
+
+	if j.VersionTag != nil {
+		if len(j.VersionTag.Description) > MaxDescriptionCharacters {
+			mErr.Errors = append(mErr.Errors, fmt.Errorf("Tagged version description must be under 1000 characters, currently %d", len(j.VersionTag.Description)))
 		}
 	}
 
@@ -6284,9 +6352,24 @@ const (
 	ScalingPolicyTypeHorizontal = "horizontal"
 )
 
-func (p *ScalingPolicy) Canonicalize() {
+func (p *ScalingPolicy) Canonicalize(job *Job, tg *TaskGroup, task *Task) {
 	if p.Type == "" {
 		p.Type = ScalingPolicyTypeHorizontal
+	}
+
+	// during restore we canonicalize to update, but these values will already
+	// have been populated during submit and we don't have references to the
+	// job, group, and task
+	if job != nil && tg != nil {
+		p.Target = map[string]string{
+			ScalingTargetNamespace: job.Namespace,
+			ScalingTargetJob:       job.ID,
+			ScalingTargetGroup:     tg.Name,
+		}
+
+		if task != nil {
+			p.Target[ScalingTargetTask] = task.Name
+		}
 	}
 }
 
@@ -6374,23 +6457,6 @@ func (p *ScalingPolicy) Diff(p2 *ScalingPolicy) bool {
 	copy.CreateIndex = p.CreateIndex
 	copy.ModifyIndex = p.ModifyIndex
 	return !reflect.DeepEqual(*p, copy)
-}
-
-// TargetTaskGroup updates a ScalingPolicy target to specify a given task group
-func (p *ScalingPolicy) TargetTaskGroup(job *Job, tg *TaskGroup) *ScalingPolicy {
-	p.Target = map[string]string{
-		ScalingTargetNamespace: job.Namespace,
-		ScalingTargetJob:       job.ID,
-		ScalingTargetGroup:     tg.Name,
-	}
-	return p
-}
-
-// TargetTask updates a ScalingPolicy target to specify a given task
-func (p *ScalingPolicy) TargetTask(job *Job, tg *TaskGroup, task *Task) *ScalingPolicy {
-	p.TargetTaskGroup(job, tg)
-	p.Target[ScalingTargetTask] = task.Name
-	return p
 }
 
 func (p *ScalingPolicy) Stub() *ScalingPolicyListStub {
@@ -6987,7 +7053,7 @@ func (tg *TaskGroup) Canonicalize(job *Job) {
 	}
 
 	if tg.Scaling != nil {
-		tg.Scaling.Canonicalize()
+		tg.Scaling.Canonicalize(job, tg, nil)
 	}
 
 	for _, service := range tg.Services {
@@ -7261,8 +7327,10 @@ func (tg *TaskGroup) validateNetworks() error {
 				}
 				// static port
 				if other, ok := staticPorts[port.Value]; ok {
-					err := fmt.Errorf("Static port %d already reserved by %s", port.Value, other)
-					mErr.Errors = append(mErr.Errors, err)
+					if !port.IgnoreCollision {
+						err := fmt.Errorf("Static port %d already reserved by %s", port.Value, other)
+						mErr.Errors = append(mErr.Errors, err)
+					}
 				} else if port.Value > math.MaxUint16 {
 					err := fmt.Errorf("Port %s (%d) cannot be greater than %d", port.Label, port.Value, math.MaxUint16)
 					mErr.Errors = append(mErr.Errors, err)
@@ -7277,6 +7345,11 @@ func (tg *TaskGroup) validateNetworks() error {
 				mErr.Errors = append(mErr.Errors, err)
 			} else if port.To > math.MaxUint16 {
 				err := fmt.Errorf("Port %q cannot be mapped to a port (%d) greater than %d", port.Label, port.To, math.MaxUint16)
+				mErr.Errors = append(mErr.Errors, err)
+			}
+
+			if port.IgnoreCollision && !(net.Mode == "" || net.Mode == "host") {
+				err := fmt.Errorf("Port %q collision may not be ignored on non-host network mode %q", port.Label, net.Mode)
 				mErr.Errors = append(mErr.Errors, err)
 			}
 		}
@@ -8085,6 +8158,10 @@ func (t *Task) Canonicalize(job *Job, tg *TaskGroup) {
 		t.KillTimeout = DefaultKillTimeout
 	}
 
+	for _, policy := range t.ScalingPolicies {
+		policy.Canonicalize(job, tg, t)
+	}
+
 	if t.Vault != nil {
 		t.Vault.Canonicalize()
 	}
@@ -8314,7 +8391,14 @@ func (t *Task) Validate(jobType string, tg *TaskGroup) error {
 		// TODO: Investigate validation of the PluginMountDir. Not much we can do apart from check IsAbs until after we understand its execution environment though :(
 	}
 
-	// Validate Identity/Identities
+	// Validate default Identity
+	if t.Identity != nil {
+		if err := t.Identity.Validate(); err != nil {
+			mErr.Errors = append(mErr.Errors, fmt.Errorf("Identity %q is invalid: %w", t.Identity.Name, err))
+		}
+	}
+
+	// Validate Identities
 	for _, wid := range t.Identities {
 		// Task.Canonicalize should move the default identity out of the Identities
 		// slice, so if one is found that means it is a duplicate.
@@ -9728,6 +9812,11 @@ type TaskArtifact struct {
 	// RelativeDest is the download destination given relative to the task's
 	// directory.
 	RelativeDest string
+
+	// Chown the resulting files and directories to the user of the task.
+	//
+	// Defaults to false.
+	Chown bool
 }
 
 func (ta *TaskArtifact) Equal(o *TaskArtifact) bool {
@@ -9747,6 +9836,8 @@ func (ta *TaskArtifact) Equal(o *TaskArtifact) bool {
 		return false
 	case ta.RelativeDest != o.RelativeDest:
 		return false
+	case ta.Chown != o.Chown:
+		return false
 	}
 	return true
 }
@@ -9762,6 +9853,7 @@ func (ta *TaskArtifact) Copy() *TaskArtifact {
 		GetterMode:     ta.GetterMode,
 		GetterInsecure: ta.GetterInsecure,
 		RelativeDest:   ta.RelativeDest,
+		Chown:          ta.Chown,
 	}
 }
 
@@ -9803,6 +9895,7 @@ func (ta *TaskArtifact) Hash() string {
 	_, _ = h.Write([]byte(ta.GetterMode))
 	_, _ = h.Write([]byte(strconv.FormatBool(ta.GetterInsecure)))
 	_, _ = h.Write([]byte(ta.RelativeDest))
+	_, _ = h.Write([]byte(strconv.FormatBool(ta.Chown)))
 	return base64.RawStdEncoding.EncodeToString(h.Sum(nil))
 }
 
@@ -12101,6 +12194,7 @@ func (s *NodeScoreMeta) Data() interface{} {
 type AllocNetworkStatus struct {
 	InterfaceName string
 	Address       string
+	AddressIPv6   string
 	DNS           *DNSConfig
 }
 
@@ -12111,6 +12205,7 @@ func (a *AllocNetworkStatus) Copy() *AllocNetworkStatus {
 	return &AllocNetworkStatus{
 		InterfaceName: a.InterfaceName,
 		Address:       a.Address,
+		AddressIPv6:   a.AddressIPv6,
 		DNS:           a.DNS.Copy(),
 	}
 }
@@ -12130,6 +12225,8 @@ func (a *AllocNetworkStatus) Equal(o *AllocNetworkStatus) bool {
 	case a.InterfaceName != o.InterfaceName:
 		return false
 	case a.Address != o.Address:
+		return false
+	case a.AddressIPv6 != o.AddressIPv6:
 		return false
 	case !a.DNS.Equal(o.DNS):
 		return false

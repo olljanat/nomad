@@ -2924,6 +2924,7 @@ func TestJobs_ApiJobToStructsJob(t *testing.T) {
 								},
 								GetterMode:   pointer.Of("dir"),
 								RelativeDest: pointer.Of("dest"),
+								Chown:        true,
 							},
 						},
 						Vault: &api.Vault{
@@ -3371,6 +3372,7 @@ func TestJobs_ApiJobToStructsJob(t *testing.T) {
 								},
 								GetterMode:   "dir",
 								RelativeDest: "dest",
+								Chown:        true,
 							},
 						},
 						Vault: &structs.Vault{
@@ -4445,6 +4447,38 @@ func TestConversion_ApiJobUIConfigToStructs(t *testing.T) {
 			},
 		}
 		result := ApiJobUIConfigToStructs(jobUI)
+		must.Eq(t, expected, result)
+	})
+}
+
+func TestConversion_ApiJobVersionTagToStructs(t *testing.T) {
+	t.Run("nil tagged version", func(t *testing.T) {
+		must.Nil(t, ApiJobVersionTagToStructs(nil))
+	})
+
+	t.Run("empty tagged version", func(t *testing.T) {
+		versionTag := &api.JobVersionTag{}
+		expected := &structs.JobVersionTag{
+			Name:        "",
+			Description: "",
+			TaggedTime:  0,
+		}
+		result := ApiJobVersionTagToStructs(versionTag)
+		must.Eq(t, expected, result)
+	})
+
+	t.Run("tagged version with tag and version", func(t *testing.T) {
+		versionTag := &api.JobVersionTag{
+			Name:        "low-latency",
+			Description: "Low latency version",
+			TaggedTime:  1234567890,
+		}
+		expected := &structs.JobVersionTag{
+			Name:        "low-latency",
+			Description: "Low latency version",
+			TaggedTime:  1234567890,
+		}
+		result := ApiJobVersionTagToStructs(versionTag)
 		must.Eq(t, expected, result)
 	})
 }
