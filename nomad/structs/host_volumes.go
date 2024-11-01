@@ -195,3 +195,53 @@ type HostVolumeStub struct {
 	ModifyIndex uint64
 	ModifyTime  uint64
 }
+
+type HostVolumeCreateRequest struct {
+	Volumes []*HostVolume
+	WriteRequest
+}
+
+type HostVolumeCreateResponse struct {
+	Volumes []*HostVolume
+	WriteMeta
+}
+
+type HostVolumeRegisterRequest struct {
+	Volumes []*HostVolume
+	WriteRequest
+}
+
+type HostVolumeRegisterResponse struct {
+	Volumes []*HostVolume
+	WriteMeta
+}
+
+type HostVolumeDeleteRequest struct {
+	VolumeIDs []string
+	WriteRequest
+}
+
+type HostVolumeDeleteResponse struct {
+	WriteMeta
+}
+
+type HostVolumeGetRequest struct {
+	ID string
+	QueryOptions
+}
+
+type HostVolumeGetResponse struct {
+	Volume *HostVolume
+	QueryMeta
+}
+
+type HostVolumeListRequest struct {
+	NodeID   string // filter
+	NodePool string // filter
+	QueryOptions
+}
+
+type HostVolumeListResponse struct {
+	Volumes []*HostVolumeStub
+	QueryMeta
+}
