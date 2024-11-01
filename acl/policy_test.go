@@ -5,7 +5,6 @@ package acl
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/hashicorp/nomad/ci"
@@ -17,9 +16,9 @@ func TestParse(t *testing.T) {
 	ci.Parallel(t)
 
 	type tcase struct {
-		Raw    string
-		ErrStr string
-		Expect *Policy
+		Raw       string
+		ExpectErr string
+		Expect    *Policy
 	}
 	tcases := []tcase{
 		{
@@ -43,6 +42,7 @@ func TestParse(t *testing.T) {
 							NamespaceCapabilityReadJobScaling,
 							NamespaceCapabilityListScalingPolicies,
 							NamespaceCapabilityReadScalingPolicy,
+							NamespaceCapabilityHostVolumeRead,
 						},
 					},
 				},
@@ -118,6 +118,7 @@ func TestParse(t *testing.T) {
 							NamespaceCapabilityReadJobScaling,
 							NamespaceCapabilityListScalingPolicies,
 							NamespaceCapabilityReadScalingPolicy,
+							NamespaceCapabilityHostVolumeRead,
 						},
 					},
 					{
@@ -132,6 +133,7 @@ func TestParse(t *testing.T) {
 							NamespaceCapabilityReadJobScaling,
 							NamespaceCapabilityListScalingPolicies,
 							NamespaceCapabilityReadScalingPolicy,
+							NamespaceCapabilityHostVolumeRead,
 							NamespaceCapabilityScaleJob,
 							NamespaceCapabilitySubmitJob,
 							NamespaceCapabilityDispatchJob,
@@ -338,6 +340,7 @@ func TestParse(t *testing.T) {
 							NamespaceCapabilityReadJobScaling,
 							NamespaceCapabilityListScalingPolicies,
 							NamespaceCapabilityReadScalingPolicy,
+							NamespaceCapabilityHostVolumeRead,
 						},
 					},
 					{
@@ -352,6 +355,7 @@ func TestParse(t *testing.T) {
 							NamespaceCapabilityReadJobScaling,
 							NamespaceCapabilityListScalingPolicies,
 							NamespaceCapabilityReadScalingPolicy,
+							NamespaceCapabilityHostVolumeRead,
 							NamespaceCapabilityScaleJob,
 							NamespaceCapabilitySubmitJob,
 							NamespaceCapabilityDispatchJob,
@@ -640,6 +644,39 @@ func TestParse(t *testing.T) {
 		},
 		{
 			`
+			namespace "default" {
+				capabilities = ["host-volume-register"]
+			}
+
+			namespace "other" {
+				capabilities = ["host-volume-create"]
+			}
+			`,
+			"",
+			&Policy{
+				Namespaces: []*NamespacePolicy{
+					{
+						Name:   "default",
+						Policy: "",
+						Capabilities: []string{
+							NamespaceCapabilityHostVolumeRegister,
+							NamespaceCapabilityHostVolumeCreate,
+							NamespaceCapabilityHostVolumeRead,
+						},
+					},
+					{
+						Name:   "other",
+						Policy: "",
+						Capabilities: []string{
+							NamespaceCapabilityHostVolumeCreate,
+							NamespaceCapabilityHostVolumeRead,
+						},
+					},
+				},
+			},
+		},
+		{
+			`
 			node_pool "pool-read-only" {
 				policy = "read"
 			}
@@ -878,22 +915,18 @@ func TestParse(t *testing.T) {
 	}
 
 	for idx, tc := range tcases {
-		t.Run(fmt.Sprintf("%d", idx), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%02d", idx), func(t *testing.T) {
 			p, err := Parse(tc.Raw)
-			if err != nil {
-				if tc.ErrStr == "" {
-					t.Fatalf("Unexpected err: %v", err)
-				}
-				if !strings.Contains(err.Error(), tc.ErrStr) {
-					t.Fatalf("Unexpected err: %v", err)
-				}
-				return
+			if tc.ExpectErr == "" {
+				must.NoError(t, err)
+			} else {
+				must.ErrorContains(t, err, tc.ExpectErr)
 			}
-			if err == nil && tc.ErrStr != "" {
-				t.Fatalf("Missing expected err")
+
+			if tc.Expect != nil {
+				tc.Expect.Raw = tc.Raw
+				must.Eq(t, tc.Expect, p)
 			}
-			tc.Expect.Raw = tc.Raw
-			assert.EqualValues(t, tc.Expect, p)
 		})
 	}
 }
