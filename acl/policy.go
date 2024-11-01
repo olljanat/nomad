@@ -47,6 +47,9 @@ const (
 	NamespaceCapabilityCSIReadVolume        = "csi-read-volume"
 	NamespaceCapabilityCSIListVolume        = "csi-list-volume"
 	NamespaceCapabilityCSIMountVolume       = "csi-mount-volume"
+	NamespaceCapabilityHostVolumeCreate     = "host-volume-create"
+	NamespaceCapabilityHostVolumeRegister   = "host-volume-register"
+	NamespaceCapabilityHostVolumeRead       = "host-volume-read"
 	NamespaceCapabilityListScalingPolicies  = "list-scaling-policies"
 	NamespaceCapabilityReadScalingPolicy    = "read-scaling-policy"
 	NamespaceCapabilityReadJobScaling       = "read-job-scaling"
@@ -207,7 +210,7 @@ func isNamespaceCapabilityValid(cap string) bool {
 		NamespaceCapabilityReadFS, NamespaceCapabilityAllocLifecycle,
 		NamespaceCapabilityAllocExec, NamespaceCapabilityAllocNodeExec,
 		NamespaceCapabilityCSIReadVolume, NamespaceCapabilityCSIWriteVolume, NamespaceCapabilityCSIListVolume, NamespaceCapabilityCSIMountVolume, NamespaceCapabilityCSIRegisterPlugin,
-		NamespaceCapabilityListScalingPolicies, NamespaceCapabilityReadScalingPolicy, NamespaceCapabilityReadJobScaling, NamespaceCapabilityScaleJob:
+		NamespaceCapabilityListScalingPolicies, NamespaceCapabilityReadScalingPolicy, NamespaceCapabilityReadJobScaling, NamespaceCapabilityScaleJob, NamespaceCapabilityHostVolumeCreate, NamespaceCapabilityHostVolumeRegister, NamespaceCapabilityHostVolumeRead:
 		return true
 	// Separate the enterprise-only capabilities
 	case NamespaceCapabilitySentinelOverride, NamespaceCapabilitySubmitRecommendation:
@@ -241,6 +244,7 @@ func expandNamespacePolicy(policy string) []string {
 		NamespaceCapabilityReadJobScaling,
 		NamespaceCapabilityListScalingPolicies,
 		NamespaceCapabilityReadScalingPolicy,
+		NamespaceCapabilityHostVolumeRead,
 	}
 
 	write := make([]string, len(read))
@@ -276,6 +280,25 @@ func expandNamespacePolicy(policy string) []string {
 	default:
 		return nil
 	}
+}
+
+// expandNamespaceCapabilities adds extra capabilities implies by fine-grained
+// capabilities.
+func expandNamespaceCapabilities(ns *NamespacePolicy) {
+	extraCaps := []string{}
+	for _, cap := range ns.Capabilities {
+		switch cap {
+		case NamespaceCapabilityHostVolumeRegister:
+			extraCaps = append(extraCaps,
+				NamespaceCapabilityHostVolumeCreate, NamespaceCapabilityHostVolumeRead)
+		case NamespaceCapabilityHostVolumeCreate:
+			extraCaps = append(extraCaps, NamespaceCapabilityHostVolumeRead)
+		}
+	}
+
+	// These may end up being duplicated, but they'll get deduplicated in NewACL
+	// when inserted into the radix tree.
+	ns.Capabilities = append(ns.Capabilities, extraCaps...)
 }
 
 func isNodePoolCapabilityValid(cap string) bool {
@@ -387,6 +410,9 @@ func Parse(rules string) (*Policy, error) {
 			extraCap := expandNamespacePolicy(ns.Policy)
 			ns.Capabilities = append(ns.Capabilities, extraCap...)
 		}
+
+		// Expand implicit capabilities
+		expandNamespaceCapabilities(ns)
 
 		if ns.Variables != nil {
 			if len(ns.Variables.Paths) == 0 {
