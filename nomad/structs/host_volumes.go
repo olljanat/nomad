@@ -43,7 +43,7 @@ type HostVolume struct {
 	// Constraints are used to select a node. If the NodeID is provided,
 	// Constraints are used to validate that the node meets those constraints at
 	// the time of volume creation.
-	Constraints []*Constraint
+	Constraints []*Constraint `json:",omitempty"`
 
 	// Because storage may allow only specific intervals of size, we accept a
 	// min and max and return the actual capacity when the volume is created or
@@ -58,7 +58,7 @@ type HostVolume struct {
 	RequestedCapabilities []*HostVolumeCapability
 
 	// Parameters are an opaque map of parameters for the host volume plugin.
-	Parameters map[string]string
+	Parameters map[string]string `json:",omitempty"`
 
 	// HostPath is the path on disk where the volume's mount point was
 	// created. We record this to make debugging easier.
@@ -77,7 +77,7 @@ type HostVolume struct {
 	// Allocations is the list of non-client-terminal allocations with claims on
 	// this host volume. They are denormalized on read and this field will be
 	// never written to Raft
-	Allocations []*AllocListStub
+	Allocations []*AllocListStub `json:",omitempty"`
 }
 
 type HostVolumeState string

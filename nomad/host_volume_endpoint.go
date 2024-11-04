@@ -345,10 +345,10 @@ func (v *HostVolume) validateVolumeUpdates(requested []*structs.HostVolume, ns s
 		// This is the only namespace we ACL checked, force all the volumes to
 		// use it.
 		vol.Namespace = ns
+		vol.ModifyTime = now
 
 		if vol.ID == "" {
 			vol.ID = uuid.Generate()
-			vol.ModifyTime = now
 			vol.CreateTime = now
 		}
 
@@ -501,7 +501,7 @@ func (v *HostVolume) deleteVolume(vol *structs.HostVolume) error {
 		HostPath:   vol.HostPath,
 		Parameters: vol.Parameters,
 	}
-	cResp := &cstructs.ClientHostVolumeCreateResponse{}
+	cResp := &cstructs.ClientHostVolumeDeleteResponse{}
 	err := v.srv.RPC(method, cReq, cResp)
 	if err != nil {
 		return err
