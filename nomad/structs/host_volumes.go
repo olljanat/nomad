@@ -69,10 +69,10 @@ type HostVolume struct {
 	State HostVolumeState
 
 	CreateIndex uint64
-	CreateTime  uint64
+	CreateTime  int64
 
 	ModifyIndex uint64
-	ModifyTime  uint64
+	ModifyTime  int64
 
 	// Allocations is the list of non-client-terminal allocations with claims on
 	// this host volume. They are denormalized on read and this field will be
@@ -190,10 +190,10 @@ type HostVolumeStub struct {
 	State     HostVolumeState
 
 	CreateIndex uint64
-	CreateTime  uint64
+	CreateTime  int64
 
 	ModifyIndex uint64
-	ModifyTime  uint64
+	ModifyTime  int64
 }
 
 type HostVolumeCreateRequest struct {

@@ -44,8 +44,7 @@ func (v *HostVolume) Get(args *structs.HostVolumeGetRequest, reply *structs.Host
 	}
 	defer metrics.MeasureSince([]string{"nomad", "host_volume", "get"}, time.Now())
 
-	// TODO(1.10.0): implement host-volume specific ACLs
-	allowVolume := acl.NamespaceValidator(acl.NamespaceCapabilityCSIReadVolume)
+	allowVolume := acl.NamespaceValidator(acl.NamespaceCapabilityHostVolumeRead)
 	aclObj, err := v.srv.ResolveACL(args)
 	if err != nil {
 		return err
@@ -151,8 +150,7 @@ func (v *HostVolume) List(args *structs.HostVolumeListRequest, reply *structs.Ho
 							return false, nil
 						}
 
-						// TODO(1.10.0): implement host-volume specific ACLs
-						allowVolume := acl.NamespaceValidator(acl.NamespaceCapabilityCSIReadVolume)
+						allowVolume := acl.NamespaceValidator(acl.NamespaceCapabilityHostVolumeRead)
 						return allowVolume(aclObj, args.RequestNamespace()), nil
 					},
 				},
@@ -207,8 +205,7 @@ func (v *HostVolume) Create(args *structs.HostVolumeCreateRequest, reply *struct
 	}
 	defer metrics.MeasureSince([]string{"nomad", "host_volume", "create"}, time.Now())
 
-	// TODO(1.10.0): implement host-volume specific ACLs
-	allowVolume := acl.NamespaceValidator(acl.NamespaceCapabilityCSIWriteVolume)
+	allowVolume := acl.NamespaceValidator(acl.NamespaceCapabilityHostVolumeCreate)
 	aclObj, err := v.srv.ResolveACL(args)
 	if err != nil {
 		return err
@@ -291,8 +288,7 @@ func (v *HostVolume) Register(args *structs.HostVolumeRegisterRequest, reply *st
 	}
 	defer metrics.MeasureSince([]string{"nomad", "host_volume", "register"}, time.Now())
 
-	// TODO(1.10.0): implement host-volume specific ACLs
-	allowVolume := acl.NamespaceValidator(acl.NamespaceCapabilityCSIWriteVolume)
+	allowVolume := acl.NamespaceValidator(acl.NamespaceCapabilityHostVolumeRegister)
 	aclObj, err := v.srv.ResolveACL(args)
 	if err != nil {
 		return err
@@ -335,6 +331,8 @@ func (v *HostVolume) Register(args *structs.HostVolumeRegisterRequest, reply *st
 
 func (v *HostVolume) validateVolumeUpdates(requested []*structs.HostVolume, ns string, mErr *multierror.Error) []*structs.HostVolume {
 
+	now := time.Now().UnixNano()
+
 	vols := []*structs.HostVolume{}
 
 	snap, err := v.srv.State().Snapshot()
@@ -346,11 +344,12 @@ func (v *HostVolume) validateVolumeUpdates(requested []*structs.HostVolume, ns s
 	for _, vol := range requested {
 		// This is the only namespace we ACL checked, force all the volumes to
 		// use it.
-		if vol.Namespace == "" {
-			vol.Namespace = ns
-		}
+		vol.Namespace = ns
+
 		if vol.ID == "" {
 			vol.ID = uuid.Generate()
+			vol.ModifyTime = now
+			vol.CreateTime = now
 		}
 
 		// if the volume already exists, we'll ensure we're validating the
@@ -434,9 +433,8 @@ func (v *HostVolume) Delete(args *structs.HostVolumeDeleteRequest, reply *struct
 	}
 	defer metrics.MeasureSince([]string{"nomad", "host_volume", "delete"}, time.Now())
 
-	// TODO(1.10.0): implement host-volume specific ACLs
 	// Note that all deleted volumes need to be in the same namespace
-	allowVolume := acl.NamespaceValidator(acl.NamespaceCapabilityCSIWriteVolume)
+	allowVolume := acl.NamespaceValidator(acl.NamespaceCapabilityHostVolumeCreate)
 	aclObj, err := v.srv.ResolveACL(args)
 	if err != nil {
 		return err
