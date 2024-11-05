@@ -7,8 +7,11 @@
 package allocrunner
 
 import (
+	"fmt"
+	
 	hclog "github.com/hashicorp/go-hclog"
 	clientconfig "github.com/hashicorp/nomad/client/config"
+	"github.com/hashicorp/nomad/client/lib/nsutil"
 	"github.com/hashicorp/nomad/client/pluginmanager/drivermanager"
 	"github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/plugins/drivers"
@@ -25,15 +28,18 @@ func newNetworkManager(alloc *structs.Allocation, driverManager drivermanager.Ma
 		tgNetMode = tg.Networks[0].Mode
 	}
 
-	groupIsolationMode := netModeToIsolationMode(tgNetMode)
+	// FixMe: is this always valid value?
+	// groupIsolationMode := drivers.NetIsolationModeGroup
 
 	// Setting the hostname is only possible where the task groups networking
 	// mode is group; meaning bridge or none.
+	/*
 	if len(tg.Networks) > 0 &&
 		(groupIsolationMode != drivers.NetIsolationModeGroup && tg.Networks[0].Hostname != "") {
 		return nil, fmt.Errorf("hostname cannot be set on task group using %q networking mode",
 			groupIsolationMode)
 	}
+	*/
 
 	// networkInitiator tracks the task driver which needs to create the network
 	// to check for multiple drivers needing to create the network.
@@ -71,10 +77,12 @@ func newNetworkManager(alloc *structs.Allocation, driverManager drivermanager.Ma
 		}
 
 		// check that the driver supports the requested network isolation mode
+		/*
 		netIsolationMode := netModeToIsolationMode(taskNetMode)
 		if !caps.HasNetIsolationMode(netIsolationMode) {
 			return nil, fmt.Errorf("task %s does not support %q networking mode", task.Name, taskNetMode)
 		}
+		*/
 
 		// check if the driver needs to create the network and if a different
 		// driver has already claimed it needs to initiate the network
