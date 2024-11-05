@@ -8,6 +8,7 @@ package allocrunner
 
 import (
 	"fmt"
+	"strings"
 	
 	hclog "github.com/hashicorp/go-hclog"
 	clientconfig "github.com/hashicorp/nomad/client/config"
