@@ -11,7 +11,7 @@ import (
 	
 	hclog "github.com/hashicorp/go-hclog"
 	clientconfig "github.com/hashicorp/nomad/client/config"
-	"github.com/hashicorp/nomad/client/lib/nsutil"
+	// "github.com/hashicorp/nomad/client/lib/nsutil"
 	"github.com/hashicorp/nomad/client/pluginmanager/drivermanager"
 	"github.com/hashicorp/nomad/nomad/structs"
 	"github.com/hashicorp/nomad/plugins/drivers"
@@ -121,6 +121,7 @@ type defaultNetworkManager struct{}
 // drivers.DriverNetworkManager interface function. It does not currently
 // support setting the hostname of the network namespace.
 func (*defaultNetworkManager) CreateNetwork(allocID string, _ *drivers.NetworkCreateRequest) (*drivers.NetworkIsolationSpec, bool, error) {
+	/*
 	netns, err := nsutil.NewNS(allocID)
 	if err != nil {
 		// when a client restarts, the namespace will already exist and
@@ -145,10 +146,11 @@ func (*defaultNetworkManager) CreateNetwork(allocID string, _ *drivers.NetworkCr
 		}
 		return nil, false, err
 	}
+	*/
 
 	spec := &drivers.NetworkIsolationSpec{
 		Mode:   drivers.NetIsolationModeGroup,
-		Path:   netns.Path(),
+		// Path:   netns.Path(),
 		Labels: make(map[string]string),
 	}
 
@@ -156,10 +158,8 @@ func (*defaultNetworkManager) CreateNetwork(allocID string, _ *drivers.NetworkCr
 }
 
 func (*defaultNetworkManager) DestroyNetwork(allocID string, spec *drivers.NetworkIsolationSpec) error {
-	if spec == nil {
-		return nil
-	}
-	return nsutil.UnmountNS(spec.Path)
+	// FixMe ?
+	return nil
 }
 
 func newNetworkConfigurator(log hclog.Logger, alloc *structs.Allocation, config *clientconfig.Config) (NetworkConfigurator, error) {
