@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -84,9 +85,16 @@ func (f *PluginsCNIFingerprint) detectOnePlugin(pluginPath string, entry os.DirE
 		return "", false
 	}
 
-	if fi.Mode()&0o111 == 0 {
-		f.logger.Debug("unexpected non-executable in cni plugin directory", "name", fi.Name())
-		return "", false // not executable
+	if runtime.GOOS == "windows" {
+		if filepath.Ext(fi.Name()) != ".exe" {
+			f.logger.Debug("unexpected non-executable in cni plugin directory", "name", fi.Name())
+			return "", false // not executable
+		}
+	} else {
+		if fi.Mode()&0o111 == 0 {
+			f.logger.Debug("unexpected non-executable in cni plugin directory", "name", fi.Name())
+			return "", false // not executable
+		}
 	}
 
 	exePath := filepath.Join(pluginPath, fi.Name())
