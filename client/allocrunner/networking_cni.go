@@ -53,7 +53,7 @@ type cniNetworkConfigurator struct {
 	rand                    *rand.Rand
 	logger                  log.Logger
 	nsOpts                  *nsOpts
-	newIPTables             func(structs.NodeNetworkAF) (IPTablesCleanup, error)
+	// newIPTables             func(structs.NodeNetworkAF) (IPTablesCleanup, error)
 }
 
 func newCNINetworkConfigurator(logger log.Logger, cniPath, cniInterfacePrefix, cniConfDir, networkName string, ignorePortMappingHostIP bool, node *structs.Node) (*cniNetworkConfigurator, error) {
@@ -74,7 +74,7 @@ func newCNINetworkConfiguratorWithConf(logger log.Logger, cniPath, cniInterfaceP
 		nodeAttrs:               node.Attributes,
 		nodeMeta:                node.Meta,
 		nsOpts:                  &nsOpts{},
-		newIPTables:             newIPTablesCleanup,
+		// newIPTables:             newIPTablesCleanup,
 	}
 	if cniPath == "" {
 		if cniPath = os.Getenv(envCNIPath); cniPath == "" {
