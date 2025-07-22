@@ -377,9 +377,15 @@ func (s *ServiceRegistrationHandler) generateNomadServiceRegistration(
 		copy(tags, serviceSpec.Tags)
 	}
 
+	// FixMe: Hide this behind of setting
+	serviceName := serviceSpec.Name
+	if addrMode == structs.AddressModeDriver {
+		serviceName += "." + serviceSpec.Namespace
+	}
+
 	return &structs.ServiceRegistration{
 		ID:          serviceregistration.MakeAllocServiceID(workload.AllocInfo.AllocID, workload.Name(), serviceSpec),
-		ServiceName: serviceSpec.Name,
+		ServiceName: serviceName,
 		NodeID:      s.cfg.NodeID,
 		JobID:       workload.AllocInfo.JobID,
 		AllocID:     workload.AllocInfo.AllocID,

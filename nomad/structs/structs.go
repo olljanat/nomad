@@ -7439,6 +7439,7 @@ func (tg *TaskGroup) validateServices() error {
 			// error messages to provide the user.
 			continue
 		}
+
 		if service.AddressMode == AddressModeDriver {
 			mErr.Errors = append(mErr.Errors, fmt.Errorf("service %q cannot use address_mode=\"driver\", only services defined in a \"task\" block can use this mode", service.Name))
 		}
