@@ -321,6 +321,10 @@ var (
 		// ContainerAdmin. If so, exits with an error unless the task config has
 		// privileged=true.
 		"windows_allow_insecure_container_admin": hclspec.NewAttr("windows_allow_insecure_container_admin", "bool", false),
+
+		// windows_default_isolation defines default isolation used by tasks in windows,
+		// can be overwritten with task config
+		"windows_default_isolation": hclspec.NewAttr("windows_default_isolation", "string", false),
 	})
 
 	// mountBodySpec is the hcl specification for the `mount` block
@@ -685,6 +689,7 @@ type DriverConfig struct {
 	pullActivityTimeoutDuration        time.Duration `codec:"-"`
 	OOMScoreAdj                        int           `codec:"oom_score_adj"`
 	WindowsAllowInsecureContainerAdmin bool          `codec:"windows_allow_insecure_container_admin"`
+	WindowsDefaultIsolation            string        `codec:"windows_default_isolation"`
 	ExtraLabels                        []string      `codec:"extra_labels"`
 	Logging                            LoggingConfig `codec:"logging"`
 

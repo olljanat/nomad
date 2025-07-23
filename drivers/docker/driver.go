@@ -1028,6 +1028,9 @@ func (d *Driver) createContainerConfig(task *drivers.TaskConfig, driverConfig *T
 	} else {
 		if driverConfig.Isolation == "" {
 			driverConfig.Isolation = windowsIsolationModeHyperV
+			if d.config.WindowsDefaultIsolation != "" {
+				driverConfig.Isolation = d.config.WindowsDefaultIsolation
+			}
 		}
 		if !slices.Contains(windowsIsolationModes, driverConfig.Isolation) {
 			return c, fmt.Errorf("Unsupported isolation mode \"%s\"", driverConfig.Isolation)
