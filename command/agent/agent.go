@@ -1063,6 +1063,10 @@ func convertClientConfig(agentConfig *Config) (*clientconfig.Config, error) {
 		conf.NomadServiceDiscovery = *agentConfig.Client.NomadServiceDiscovery
 	}
 
+	if agentConfig.Client.TaskApiSocket != nil {
+		conf.TaskApiSocket = *agentConfig.Client.TaskApiSocket
+	}
+
 	artifactConfig, err := clientconfig.ArtifactConfigFromAgent(agentConfig.Client.Artifact)
 	if err != nil {
 		return nil, fmt.Errorf("invalid artifact config: %v", err)

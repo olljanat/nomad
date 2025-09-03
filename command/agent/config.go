@@ -421,6 +421,10 @@ type ClientConfig struct {
 	// correct scheduling decisions on allocations which require this.
 	NomadServiceDiscovery *bool `hcl:"nomad_service_discovery"`
 
+	// TaskApiSocket is a boolean parameter which allows operators to
+	// enable/disable to Task API Unix Domain Socket (UDS).
+	TaskApiSocket *bool `hcl:"task_api_socket"`
+
 	// Artifact contains the configuration for artifacts.
 	Artifact *config.ArtifactConfig `hcl:"artifact"`
 
