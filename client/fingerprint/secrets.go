@@ -53,6 +53,8 @@ func (s *SecretsPluginFingerprint) Fingerprint(request *FingerprintRequest, resp
 	// map of plugin names to fingerprinted versions
 	plugins := map[string]string{}
 	for name := range files {
+		s.logger.Trace("DEBUG: processing file", name)
+
 		plug, err := commonplugins.NewExternalSecretsPlugin(request.Config.CommonPluginDir, name, nil)
 		if err != nil {
 			return err
