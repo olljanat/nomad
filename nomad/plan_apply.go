@@ -162,6 +162,7 @@ func (p *planner) planApply() {
 		}
 
 		// Evaluate the plan
+		p.srv.logger.Warn("EVALUATE PLAN", pool, snap, pending.plan)
 		result, err := evaluatePlan(pool, snap, pending.plan, p.srv.logger)
 		if err != nil {
 			p.srv.logger.Error("failed to evaluate plan", "error", err)
