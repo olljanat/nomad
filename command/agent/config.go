@@ -439,6 +439,22 @@ type ClientConfig struct {
 	// Defaults to 0 and ignored if unset.
 	NodeMaxAllocs int `hcl:"node_max_allocs"`
 
+	// ConcurrentStartupLimit limits the number of allocations that can be
+	// started concurrently on this client. "Starting" includes pulling container
+	// images and launching the container/task. If set to 0 (default), there is
+	// no limit.
+	//
+	// See also StartupWaitForHealth below.
+	ConcurrentStartupLimit int `hcl:"concurrent_startup_limit"`
+
+	// StartupWaitForHealth controls when the concurrency slot is released for
+	// the allocation:
+	//   - false (default, as requested in #25880): slot is released as soon as
+	//     the container/task reaches "running" state (health checks may still be pending).
+	//   - true: slot is released only after the allocation is marked healthy
+	//     (i.e. all health checks pass and deployment health is healthy).
+	StartupWaitForHealth bool `hcl:"startup_wait_for_health"`
+
 	// LogFile is used by MonitorExport to stream a client's log file
 	LogFile string `hcl:"log_file"`
 

@@ -31,6 +31,7 @@ import (
 	"github.com/hashicorp/nomad/plugins/base"
 	"github.com/hashicorp/nomad/version"
 	"github.com/hashicorp/yamux"
+	"golang.org/x/sync/semaphore"
 )
 
 var (
@@ -393,6 +394,21 @@ type Config struct {
 	// NodeMaxAllocs is an optional field that sets the maximum number of
 	// allocations a node can be assigned. Defaults to 0 and ignored if unset.
 	NodeMaxAllocs int
+
+	// ConcurrentStartupLimit is copied from the agent ClientConfig.
+	// 0 = unlimited (default).
+	ConcurrentStartupLimit int
+
+	// StartupSemaphore is the shared limiter (set once in NewClient).
+	// nil = unlimited (default behavior).
+	StartupSemaphore *semaphore.Weighted `json:"-"`
+
+	// StartupWaitForHealth controls release timing of the startup slot
+	// (see comment in command/agent/config.go).
+	// false = release on "running" (recommended for thundering-herd mitigation
+	//         during mass restarts / undrains).
+	// true  = release only after healthy.
+	StartupWaitForHealth bool
 
 	// LogFile is used by MonitorExport to stream a server's log file
 	LogFile string `hcl:"log_file"`

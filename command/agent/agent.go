@@ -1074,6 +1074,10 @@ func convertClientConfig(agentConfig *Config) (*clientconfig.Config, error) {
 	conf.GCMaxAllocs = agentConfig.Client.GCMaxAllocs
 	conf.GCVolumesOnNodeGC = agentConfig.Client.GCVolumesOnNodeGC
 
+	// Set the concurrent startup related configs
+	conf.ConcurrentStartupLimit = agentConfig.Client.ConcurrentStartupLimit
+	conf.StartupWaitForHealth = agentConfig.Client.StartupWaitForHealth
+
 	if agentConfig.Client.NoHostUUID != nil {
 		conf.NoHostUUID = *agentConfig.Client.NoHostUUID
 	} else {

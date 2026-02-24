@@ -401,6 +401,14 @@ func (ar *allocRunner) Run() {
 		}
 	}
 
+	if ar.clientConfig.StartupSemaphore != nil {
+		if err := ar.clientConfig.StartupSemaphore.Acquire(context.Background(), 1); err != nil {
+			ar.logger.Error("failed to acquire startup slot", "error", err)
+			return
+		}
+		ar.logger.Trace("acquired startup slot for allocation", "alloc_id", ar.id)
+	}
+
 	// Run the runners (blocks until they exit)
 	ar.runTasks()
 
@@ -441,6 +449,20 @@ func (ar *allocRunner) shouldRun() bool {
 
 // runTasks is used to run the task runners and block until they exit.
 func (ar *allocRunner) runTasks() {
+	// Release logic depends on the two options requested by the user:
+	if !ar.clientConfig.StartupWaitForHealth {
+		// Option 1 (default, matches #25880): release as soon as tasks reach "running"
+		// (container is launched; health checks may still be pending)
+		go func() {
+			ar.waitForTasksRunning()
+		}()
+	} else {
+		// Option 2: wait for health checks to pass (allocation becomes healthy)
+		go func() {
+			ar.waitForAllocationHealthy()
+		}()
+	}
+
 	// Start and wait for all tasks.
 	for _, task := range ar.tasks {
 		go task.Run()
@@ -1594,4 +1616,66 @@ func (ar *allocRunner) setHookStatsHandler(ns string) {
 		labels = append(labels, metrics.Label{Name: "namespace", Value: ns})
 		ar.hookStatsHandler = hookstats.NewHandler(labels, "alloc_hook")
 	}
+}
+
+// waitForTasksRunning blocks until the allocation reaches ClientStatus = "running"
+// (i.e. containers/tasks have been launched and are running).
+// This is the **default** behaviour requested in https://github.com/hashicorp/nomad/issues/25880.
+func (ar *allocRunner) waitForTasksRunning() {
+	ar.logger.Trace("waiting for tasks to reach running state (startup concurrency slot)", "alloc_id", ar.id)
+
+	for {
+		select {
+		case <-ar.waitCh: // alloc runner is shutting down
+			return
+		case <-ar.taskStateUpdatedCh:
+			if ar.isClientStatusRunning() {
+				ar.logger.Trace("all tasks running → releasing startup concurrency slot", "alloc_id", ar.id)
+				return
+			}
+		}
+	}
+}
+
+// waitForAllocationHealthy blocks until the allocation is fully healthy.
+// Used when `startup_wait_for_health = true` (the second option you asked for).
+func (ar *allocRunner) waitForAllocationHealthy() {
+	ar.logger.Trace("waiting for allocation to become fully healthy (startup concurrency slot)", "alloc_id", ar.id)
+
+	for {
+		select {
+		case <-ar.waitCh: // alloc runner is shutting down
+			return
+		case <-ar.taskStateUpdatedCh:
+			if ar.isAllocationHealthy() {
+				ar.logger.Trace("allocation is healthy → releasing startup concurrency slot", "alloc_id", ar.id)
+				return
+			}
+		}
+	}
+}
+
+// isClientStatusRunning returns true when Nomad’s internal client status is "running".
+// Uses exactly the same logic as the rest of Nomad (`getClientStatus` + `AllocState`).
+func (ar *allocRunner) isClientStatusRunning() bool {
+	return ar.AllocState().ClientStatus == structs.AllocClientStatusRunning
+}
+
+// isAllocationHealthy returns true when:
+//   - tasks are running, AND
+//   - if the allocation is part of a deployment, the deployment status is Healthy = true
+func (ar *allocRunner) isAllocationHealthy() bool {
+	state := ar.AllocState()
+
+	if state.ClientStatus != structs.AllocClientStatusRunning {
+		return false
+	}
+
+	// Deployment-aware health (this is what Nomad uses for rolling updates, canaries, etc.)
+	if ds := state.DeploymentStatus; ds != nil && ds.Healthy != nil {
+		return *ds.Healthy
+	}
+
+	// Non-deployment jobs → healthy as soon as running
+	return true
 }

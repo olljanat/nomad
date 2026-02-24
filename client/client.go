@@ -4,6 +4,7 @@
 package client
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
@@ -68,6 +69,7 @@ import (
 	"github.com/hashicorp/nomad/plugins/csi"
 	"github.com/hashicorp/nomad/plugins/device"
 	"github.com/shirou/gopsutil/v3/host"
+	"golang.org/x/sync/semaphore"
 )
 
 const (
@@ -344,6 +346,11 @@ type Client struct {
 	// at the next heartbeat. It is set by an operator calling the node identity
 	// renew RPC method.
 	identityForceRenewal atomic.Bool
+
+	// startupSem limits concurrent allocation starts.
+	// nil when unlimited.
+	startupSem           *semaphore.Weighted
+	startupWaitForHealth bool
 }
 
 var (
@@ -408,6 +415,18 @@ func NewClient(cfg *config.Config, consulCatalog consul.CatalogAPI, consulProxie
 		allocrunnerFactory:   cfg.AllocRunnerFactory,
 		identity:             atomic.Value{},
 		identityForceRenewal: atomic.Bool{},
+	}
+
+	// Setup concurrency limiter for allocation startup
+	if c.config.ConcurrentStartupLimit > 0 {
+		c.startupSem = semaphore.NewWeighted(int64(c.config.ConcurrentStartupLimit))
+	}
+	c.startupWaitForHealth = c.config.StartupWaitForHealth
+
+	// Initialize shared semaphore (only once per client)
+	if c.config.ConcurrentStartupLimit > 0 {
+		c.config.StartupSemaphore = semaphore.NewWeighted(
+			int64(c.config.ConcurrentStartupLimit))
 	}
 
 	// we can't have this set in the default Config because of import cycles
@@ -3192,7 +3211,7 @@ DISCOLOOP:
 		if len(mErr.Errors) > 0 {
 			return mErr.ErrorOrNil()
 		}
-		return fmt.Errorf("no Nomad Servers advertising service %q in Consul datacenters: %+q", serviceName, dcs)
+		return fmt.Errorf("no Nomad Servers advertising service %q in Consul datacenters: %q", serviceName, dcs)
 	}
 
 	consulLogger.Info("discovered following servers", "servers", nomadServers)
@@ -3514,6 +3533,14 @@ func (c *Client) GetTaskEventHandler(allocID, taskName string) drivermanager.Eve
 		return ar.GetTaskEventHandler(taskName)
 	}
 	return nil
+}
+
+// acquireStartupSlot blocks until a startup slot is available or ctx is done.
+func (c *Client) acquireStartupSlot(ctx context.Context) error {
+	if c.startupSem == nil {
+		return nil
+	}
+	return c.startupSem.Acquire(ctx, 1)
 }
 
 // pendingClientUpdates are the set of allocation updates that the client is
